@@ -3,6 +3,8 @@ package com.hmdp.service.impl;
 import cn.hutool.Hutool;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.json.JSON;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
@@ -10,13 +12,18 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
+import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
+
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 
@@ -33,8 +40,7 @@ import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
     @Resource
-    private StringRedisTemplate stringRedisTemplate;
-
+    private RedisTemplate redisTemplate;
 
     @Override
     public Result sedCode(String phone, HttpSession session) {
@@ -45,27 +51,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 2、生成验证码
         String code = RandomUtil.randomNumbers(6);
         // todo 利用邮箱生成验证码
-        // 3、将验证码存入到session中， todo 是不是利用 手机号存储更好？
-        session.setAttribute("code", code);
+//        // 3、将验证码存入到session中，
+//        session.setAttribute("code", code);
+
+        // 3、将验证码存入到redis中，
+        redisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_CODE + phone, code, RedisConstants.LOGIN_CODE_TTL, TimeUnit.MINUTES);
 
         // 4、发送验证码
         log.debug("发送的验证码为=" + code);
         // 5、展示结果
         return Result.ok();
-//        //1. 校验手机号
-//        if (RegexUtils.isPhoneInvalid(phone)) {
-//            //2.如果不符合，返回错误信息
-//            return Result.fail("手机号格式错误");
-//        }
-//
-//        //3. 符合，生成验证码
-//        String code = RandomUtil.randomNumbers(6);
-//        //4. 保存验证码到session
-//        session.setAttribute("code",code);
-//        //5. 发送验证码
-//        log.debug("发送短信验证码成功，验证码:{}",code);
-//        //返回ok
-//        return Result.ok();
     }
 
     /**
@@ -79,18 +74,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 1、检验手机号
         // 2、检验验证码 或者 检验密码 todo 密码在数据库中存储要采用加密形式
         // todo 检验是否注册
-        // 3、不正确， 返回错误提示信息
-        // 4、 正确， 保存信息到 session中
-        //
+
         //1. 校验手机号
         String phone = loginForm.getPhone();
         if (RegexUtils.isPhoneInvalid(phone)) {
             return Result.fail("手机号格式错误");
         }
+
         //2. 校验验证码
-        Object cacheCode = session.getAttribute("code");
+        String cacheCode = (String) redisTemplate.opsForValue().get(RedisConstants.LOGIN_USER_CODE + loginForm.getPhone());
+//        Object cacheCode = session.getAttribute("code");
         String code = loginForm.getCode();
-        if (cacheCode == null || !cacheCode.toString().equals(code)){
+        if (cacheCode == null || !cacheCode.equals(code)){
             //3. 不一致，报错
             return Result.fail("验证码错误");
         }
@@ -104,9 +99,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             user = createUserWithPhone(phone);
         }
 
-        //7.保存用户信息到session
-        session.setAttribute("user",BeanUtil.copyProperties(user,UserDTO.class));
-        return Result.ok();
+        //7.保存用户信息到redis
+
+        UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
+
+        // todo 生成令牌， 用于作为key值
+        String token = RandomUtil.randomString(10);
+        String userDTOJSON = JSONUtil.toJsonStr(userDTO);
+        // 向redis中存入token 设置有效期
+        redisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_KEY + token, userDTOJSON, RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
+
+        // 删除验证码
+        Boolean delete = redisTemplate.delete(RedisConstants.LOGIN_USER_CODE + phone);
+        if(Boolean.TRUE.equals(delete)) {
+            log.debug("删除验证码成功");
+        }
+
+        return Result.ok(token);
     }
 
 

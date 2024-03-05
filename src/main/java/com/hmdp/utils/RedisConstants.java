@@ -1,10 +1,55 @@
 package com.hmdp.utils;
 
+/**
+ * 存入到redis中的key值， 常量
+ */
 public class RedisConstants {
-    public static final String LOGIN_CODE_KEY = "login:code:";
+
+    /**
+     *  向redis存入验证码的前缀
+     */
+    public static final String LOGIN_USER_CODE ="login:code:";
+//    public static final String LOGIN_CODE_KEY = "login:code:";
+
+    /**
+     * 验证码的存在时间
+     */
     public static final Long LOGIN_CODE_TTL = 2L;
+
+    /**
+     * 存入token的前缀
+     */
     public static final String LOGIN_USER_KEY = "login:token:";
-    public static final Long LOGIN_USER_TTL = 36000L;
+
+    /**
+     * 令牌的存在时间
+     */
+    public static final Long LOGIN_USER_TTL = 30L;
+
+    /**
+     * 请求的头信息
+     */
+    public static final String LOGIN_AUTHORIZATION = "authorization";
+
+    /**
+     * 商店shop的前缀
+     */
+    public static final String SHOP_KEY = "shop:id:";
+
+    /**
+     *  商店在redis当中的存在时间
+     */
+    public static final Long  SHOP_TTL = 30L;
+
+    /**
+     *  null商店在redis当中的存在时间
+     */
+    public static final Long  NULL_SHOP_TTL = 2L;
+
+    /**
+     * shopType的前缀
+     */
+    public static final String SHOP_TYPE_KEY = "shopType:";
 
     public static final Long CACHE_NULL_TTL = 2L;
 
