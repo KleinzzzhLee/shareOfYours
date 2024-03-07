@@ -51,6 +51,15 @@ public class RedisConstants {
      */
     public static final String SHOP_TYPE_KEY = "shopType:";
 
+    /**
+     * redis缓存，保证秒杀券一人一张的key
+     */
+    public  static final String CACHE_VOUCHER_USER_KEY = "cache:voucher:user:key";
+    /**
+     * 上述信息的存储时长
+     */
+    public static final Long CACHE_VOUCHER_USER_TTL = 2L;
+
     public static final Long CACHE_NULL_TTL = 2L;
 
     public static final Long CACHE_SHOP_TTL = 30L;

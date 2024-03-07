@@ -13,7 +13,7 @@ import javax.annotation.Resource;
  *  前端控制器
  * </p>
  *
- * @author 虎哥
+ * @author zzzhlee
  * @since 2021-12-22
  */
 @RestController
@@ -39,7 +39,7 @@ public class VoucherController {
      * @param voucher 优惠券信息，包含秒杀信息
      * @return 优惠券id
      */
-    @PostMapping("seckill")
+    @PostMapping("/seckill")
     public Result addSeckillVoucher(@RequestBody Voucher voucher) {
         voucherService.addSeckillVoucher(voucher);
         return Result.ok(voucher.getId());
@@ -52,6 +52,7 @@ public class VoucherController {
      */
     @GetMapping("/list/{shopId}")
     public Result queryVoucherOfShop(@PathVariable("shopId") Long shopId) {
+        // 从请求头中获取到认证信息，再从缓存中查询id
        return voucherService.queryVoucherOfShop(shopId);
     }
 }

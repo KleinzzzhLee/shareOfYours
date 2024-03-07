@@ -12,11 +12,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
+ * 优惠券
+ * @author zzzhlee
  * @since 2021-12-22
  */
 @Data
@@ -54,7 +51,7 @@ public class Voucher implements Serializable {
     private String rules;
 
     /**
-     * 支付金额
+     * 支付金额 单位为分
      */
     private Long payValue;
 
@@ -65,6 +62,8 @@ public class Voucher implements Serializable {
 
     /**
      * 优惠券类型
+     * 0 普通券
+     * 1 秒杀券
      */
     private Integer type;
 
