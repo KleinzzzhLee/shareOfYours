@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 
 /**
  * <p>
- * 
+ *
  * </p>
  *
  * @author zzzhlee
@@ -38,7 +38,7 @@ public class BlogComments implements Serializable {
     private Long userId;
 
     /**
-     * 探店id
+     * 博客id
      */
     private Long blogId;
 

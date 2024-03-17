@@ -9,7 +9,5 @@ public interface IVoucherOrderService extends IService<VoucherOrder>  {
 
     Result purchaseSecKillVoucher(Long voucherId);
 
-    Result purchaseSecKillVoucherByLock(SeckillVoucher seckillVoucher);
-
-    Result purchaseSecKillVoucherByRedis(Long voucherId);
+//    Result purchaseSecKillVoucherByRedis(Long voucherId) throws InterruptedException;
 }

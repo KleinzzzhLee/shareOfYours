@@ -10,6 +10,10 @@ import java.time.ZoneOffset;
  */
 @Component
 public class SnowflakeIdWorker {
+
+    public static final Long ORDER_PREFIX = 123L;
+
+
     /**
      * 开始时间戳
      */

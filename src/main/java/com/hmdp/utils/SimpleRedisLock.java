@@ -5,7 +5,6 @@ import cn.hutool.core.util.BooleanUtil;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
 
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
@@ -25,7 +24,7 @@ public class SimpleRedisLock implements ILock {
 
     static {
         UNLOCK_SCRIPT = new DefaultRedisScript<>();
-        UNLOCK_SCRIPT.setLocation(new ClassPathResource("unlock.lua"));
+        UNLOCK_SCRIPT.setLocation(new ClassPathResource("luas/unlock.lua"));
         UNLOCK_SCRIPT.setResultType(Long.class);
     }
 

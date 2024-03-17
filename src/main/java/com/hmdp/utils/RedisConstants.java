@@ -60,13 +60,45 @@ public class RedisConstants {
      */
     public static final Long CACHE_VOUCHER_USER_TTL = 2L;
 
-    public static final Long CACHE_NULL_TTL = 2L;
-
-    public static final Long CACHE_SHOP_TTL = 30L;
-    public static final String CACHE_SHOP_KEY = "cache:shop:";
+    /**
+     *
+     */
 
     public static final String LOCK_SHOP_KEY = "lock:shop:";
     public static final Long LOCK_SHOP_TTL = 10L;
 
-    public static final String SECKILL_STOCK_KEY = "seckill:stock:";
+
+
+    /**
+     * 向缓存存入秒杀券的前缀信息
+     */
+    public static final String SECKILLVOUCHER_STOCK_HASH = "seckillvoucher:stock";
+
+    /**
+     * 向缓存存入购买者的前缀信息
+     */
+    public static final String SECKILLVOUCHER_ORDER_LIST = "seckillvoucher:order:";
+
+    /**
+     * 向redis存入的购买信息  ， 异步获取
+     */
+    public static final String UNPROCESSED_ORDER = "unprocessed:orders:";
+
+
+    /**
+     *  达人探店  点赞功能
+     *      keypoint  1、存储每个表是否需要更新  Hash
+     *                2、存储每个表的点赞数量    Hash
+     *                3、存储每个表的点赞人的ID  Set
+     */
+    public static final String BLOG_LIKE_CACHE = "blog:like:";
+    public static final String BLOG_LIKE_ISUPDATE = "blog:like:isupdate";
+    public static final String BLOG_LIKE_TOTAL = "blog:like:total";
+
+
+    /**
+     * 用户的关注表  set
+     */
+    public static final String USER_FOLLOW = "user:follow:";
+    public static final String FEED_OUT = "FEED:";
 }

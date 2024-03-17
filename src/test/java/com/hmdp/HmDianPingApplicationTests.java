@@ -7,6 +7,8 @@ import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisData;
 import com.hmdp.utils.SnowflakeIdWorker;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisTemplate;
 
@@ -28,6 +30,9 @@ class HmDianPingApplicationTests {
 
     @Resource
     SnowflakeIdWorker snowflakeIdWorker;
+
+    @Resource
+    RedissonClient redissonClient;
 
     @Test
     public void test1() {
@@ -80,6 +85,11 @@ class HmDianPingApplicationTests {
         } else {
             System.out.println(false);
         }
+    }
+    @Test
+    public void testRedisson() throws InterruptedException {
+        RLock anylock = redissonClient.getLock("anylock");
+        anylock.tryLock(1,TimeUnit.MINUTES);
     }
 
 }

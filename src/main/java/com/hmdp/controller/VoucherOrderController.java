@@ -44,8 +44,6 @@ public class VoucherOrderController {
 //        String userJSON  = (String) redisTemplate.opsForValue().get(RedisConstants.LOGIN_USER_KEY + authorization);
 //        User user = JSONUtil.toBean(userJSON, User.class);
 //        return voucherOrderService.purchaseSecKillVoucher(user.getId(),voucherId);
-
-
         return voucherOrderService.purchaseSecKillVoucher(voucherId);
     }
 }
