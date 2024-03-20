@@ -2,12 +2,10 @@ package com.hmdp.controller;
 
 
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.hmdp.dto.Result;
+import com.hmdp.entity.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.service.IShopService;
-import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.SystemConstants;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;

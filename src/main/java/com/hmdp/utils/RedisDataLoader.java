@@ -19,6 +19,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+
+/**
+ * keypoint 这个类是为了防止redis当中购买秒杀券的信息在redis当中突然消息
+ * 所以在项目启动后，
+ */
 @Component
 public class RedisDataLoader implements ApplicationRunner {
 

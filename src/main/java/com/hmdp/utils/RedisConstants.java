@@ -31,10 +31,7 @@ public class RedisConstants {
      */
     public static final String LOGIN_AUTHORIZATION = "authorization";
 
-    /**
-     * 商店shop的前缀
-     */
-    public static final String SHOP_KEY = "shop:id:";
+
 
     /**
      *  商店在redis当中的存在时间
@@ -94,11 +91,44 @@ public class RedisConstants {
     public static final String BLOG_LIKE_CACHE = "blog:like:";
     public static final String BLOG_LIKE_ISUPDATE = "blog:like:isupdate";
     public static final String BLOG_LIKE_TOTAL = "blog:like:total";
-
-
     /**
      * 用户的关注表  set
      */
     public static final String USER_FOLLOW = "user:follow:";
     public static final String FEED_OUT = "FEED:";
+
+
+
+    /**
+     * 商店shop的前缀
+     */
+    public static final String SHOP_KEY = "shop:id:";
+    /**
+     * 已缓存的商店信息的id
+     */
+    public static final String SHOP_CACHE_ID = "shop:cache:id";
+
+    /**
+     * 突然到访的商店热点信息
+     */
+    public static final String SHOP_SUDDEN_TIMES = "shop:sudden:times";
+    /**
+     * 对于突然到访的热点数据上锁处理
+     */
+    public static final String SHOP_CACHING_LOCK = "shop:caching:lock:";
+
+    /**
+     * 访问商店的频率统计
+     */
+    public static final String SHOP_GET_TIMES = "shop:get:times";
+
+    /**
+     * 热点数据的访问时间戳
+     */
+    public static final String HOT_SHOP_TIME = "shop:hot:timeStamp";
+
+    /**
+     * 商店更新时间戳的依据
+     */
+    public static final String HOT_SHOP_UPDATE_KEY = "shop:update:timeStamp";
 }

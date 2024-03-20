@@ -1,18 +1,10 @@
 package com.hmdp.utils;
 
-import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
-import com.hmdp.dto.UserDTO;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.hmdp.entity.dto.UserDTO;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-import java.util.concurrent.TimeUnit;
 
 
 /**

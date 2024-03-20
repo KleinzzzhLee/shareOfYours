@@ -2,46 +2,32 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.ListUtil;
-import cn.hutool.core.lang.intern.InternUtil;
-import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.json.JSONUtil;
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.dto.Result;
-import com.hmdp.dto.UserDTO;
-import com.hmdp.entity.SeckillVoucher;
-import com.hmdp.entity.Voucher;
+import com.hmdp.entity.dto.Result;
+import com.hmdp.entity.dto.UserDTO;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
-import com.hmdp.service.IVoucherService;
 import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.SnowflakeIdWorker;
+import com.hmdp.utils.ThreadPool;
 import com.hmdp.utils.UserHolder;
-import io.netty.util.concurrent.SingleThreadEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
-import org.springframework.aop.framework.AopContext;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -55,7 +41,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private IVoucherOrderService voucherOrderService;
 
-    // keypoint 利用redisson 解除在redis上的原子性问题
+    // kp 利用redisson 解除在redis上的原子性问题
     @Resource
     private RedissonClient redissonClient;
     @Resource
@@ -69,12 +55,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     }
 
     // 线程池
-    private static final ExecutorService threadPool = Executors.newSingleThreadExecutor();
 
 
     @PostConstruct
     private void init() {
-        threadPool.submit(new syncHandleSeckillVoucherOrder());
+        ThreadPool.submitTask(new syncHandleSeckillVoucherOrder());
     }
 
     private class syncHandleSeckillVoucherOrder implements Runnable {
@@ -103,7 +88,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                     redisTemplate.opsForStream().acknowledge("stream.orders","group", entries.getId());
 
                 } catch (InterruptedException e) {
-                    // keypoint 如果消息未被确认， 就会进入padding-list  应再去padding-list判断
+                    // kp 如果消息未被确认， 就会进入padding-list  应再去padding-list判断
                     handlePaddingList();
                 }
             }
@@ -139,7 +124,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                             "group",
                             entries.getId());
                 } catch (InterruptedException e) {
-                    // keypoint 如果padding-list中的消息再次未被确认， 继续下一次循环， 依然可以读到
+                    // kp 如果padding-list中的消息再次未被确认， 继续下一次循环， 依然可以读到
                     log.debug("处理padding-list出现异常");
                     try {
                         Thread.sleep(20);
@@ -162,7 +147,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         // 1、获取用户
         Long userId = voucherOrder.getUserId();
         // 2、创建锁
-        // keypoint 通过redisson方式获取锁
+        // kp 通过redisson方式获取锁
         //      1、可重试锁： 源码内部 采用了重试机制， 如果获取一次不成功，等待一段时间继续获取，直到时间耗尽
         //      2、可重入： 通过在缓存内存入hash结构， 以当前线程id为key value为重试次数，
         RLock lock = redissonClient.getLock(RedisConstants.CACHE_VOUCHER_USER_KEY);
@@ -232,7 +217,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
 
 //    /**
-//     *   keypoint 抢购秒杀券
+//     *   kp 抢购秒杀券
 //     *              在单体架构下 基于锁的实现
 //     *     todo 解决超卖问题 ， 利用乐观锁 ： 在更改时 进行检测， 看看和之前查的是否一致
 //     *          实现一人最多买一张， 利用悲观锁 ： 在购买前 去表中 判断是否购买过。
@@ -242,12 +227,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //     * @return
 //     */
 //    public Result purchaseSecKillVoucher(Long voucherId) {
-//        // keypoint spring框架下的事物注解@Trasanction 是利用的AOP和动态代理机制 当在一个方法中调用事物时， 会失效
+//        // kp spring框架下的事物注解@Trasanction 是利用的AOP和动态代理机制 当在一个方法中调用事物时， 会失效
 //        // 以下为解决措施
 //        return purchaseSecKillVoucherByRedis(voucherId);
 //    }
 
-//    /**   keypoint FIRST
+//    /**   kp FIRST
 //     * 利用事物机制
 //     * @param seckillVoucher 秒杀券
 //     * @return
@@ -262,7 +247,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //            return Result.fail("只许购买一张");
 //        }
 //        VoucherOrder order = new VoucherOrder();
-//        // keypoint 利用乐观锁， 在修改之前再次检查剩余是否足够
+//        // kp 利用乐观锁， 在修改之前再次检查剩余是否足够
 //        // 如果足够才能购买， 解决了超卖的问题
 //        boolean update = seckillVoucherService.update()
 //                .gt("stock", 0)
@@ -272,7 +257,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //        if (!update) {
 //            return Result.fail("库存不足");
 //        }
-//        // 4、keypoint 获取到唯一自增的主键，雪花算法
+//        // 4、kp 获取到唯一自增的主键，雪花算法
 //        Long id = SnowflakeIdWorker.nextId(1234L);
 //        // 5、向数据库中增加订单信息
 //        order.setId(id);
@@ -287,7 +272,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //    }
 
 /*
-    //        keypoint 单体模式 解决方案 SECOND : 解决了一人一单的问题
+    //        kp 单体模式 解决方案 SECOND : 解决了一人一单的问题
 //        1、查询秒杀券是否存在
 //        SeckillVoucher seckillVoucher =  seckillVoucherService.getById(voucherId);
 //        if(seckillVoucher == null ) {
@@ -309,11 +294,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 ////        }
 //        // 6、返回结果 订单id
 //        /**
-//         * keypoint 字符串的intern方法，
+//         * kp 字符串的intern方法，
 //         *  intern是从字符串常量池中搜索是否存在该字符串， 如果存在。直接取出； 不存在，在字符串常量池中添加在返回
 //         */
 //        Long userId = UserHolder.getUser().getId();
-//        keypoint 为保证一人一单， 注意点：
+//        kp 为保证一人一单， 注意点：
 //          1、悲观锁往往锁的是对象
 //          2、应先提交事物，再释放锁
 //          3、在方法内部调用@Trasactional标注的方法， 不能使事物生效，
@@ -332,9 +317,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
 
 //    /**
-//     * keypoint 利用缓存解决 集群模式下锁失效的问题
+//     * kp 利用缓存解决 集群模式下锁失效的问题
 //     *      失效原因： 通过悲观锁保证只有一个线程执行该程序， 仅在单体模式下生效，如果是集群。 则无法解决
-//     * keypoint：
+//     * kp：
 //     *      version 1： 通过redis记录当前进行的事物， 在使用当前UUID标识线程， 做到 一人一单  使用UUID是因为线程的id
 //     * @param voucherId
 //     * @return
@@ -357,12 +342,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //
 //
 //
-//        // 4、keypoint 向redis中存入标识信息 设置过期时间,
+//        // 4、kp 向redis中存入标识信息 设置过期时间,
 //        // todo  封装它， 因为， 在每次获取锁时，也可能存在别的
 //        // todo 这里要使用final关键字， 即使中间出现意外， 也不会导致再次获取无法成功
 //
 ////        SimpleRedisLock srl = new SimpleRedisLock(redisTemplate, RedisConstants.CACHE_VOUCHER_USER_KEY);
-//        // keypoint 利用redisson实现
+//        // kp 利用redisson实现
 //        RLock rLock = redissonClient.getLock(RedisConstants.CACHE_VOUCHER_USER_KEY + user.getId());
 ////        rLock.tryLock(60, TimeUnit.SECONDS);
 //        try {

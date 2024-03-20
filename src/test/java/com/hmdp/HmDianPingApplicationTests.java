@@ -2,6 +2,8 @@ package com.hmdp;
 
 import cn.hutool.json.JSONUtil;
 import com.hmdp.entity.Shop;
+import com.hmdp.entity.vo.MailVO;
+import com.hmdp.service.impl.MailServiceImpl;
 import com.hmdp.service.impl.ShopServiceImpl;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisData;
@@ -23,6 +25,10 @@ import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
 class HmDianPingApplicationTests {
+
+    @Resource
+    private MailServiceImpl mailService;
+
     @Resource
     RedisTemplate<String,Object> redisTemplate;
     @Resource
@@ -33,6 +39,14 @@ class HmDianPingApplicationTests {
 
     @Resource
     RedissonClient redissonClient;
+
+    @Test
+    public void testMailService() {
+        MailVO mail = new MailVO();
+        mail.setTo("1924774423@qq.com");
+        mail.setCode("123456");
+        mailService.senMail(mail);
+    }
 
     @Test
     public void test1() {

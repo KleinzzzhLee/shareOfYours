@@ -1,14 +1,13 @@
 package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.dto.Result;
-import com.hmdp.dto.ScrollResult;
-import com.hmdp.dto.UserDTO;
+import com.hmdp.entity.dto.Result;
+import com.hmdp.entity.dto.ScrollResult;
+import com.hmdp.entity.dto.UserDTO;
 import com.hmdp.entity.Blog;
 import com.hmdp.entity.Follow;
 import com.hmdp.entity.User;
@@ -18,6 +17,7 @@ import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.ThreadPool;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -29,7 +29,6 @@ import javax.annotation.Resource;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -53,9 +52,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     @Resource
     private IFollowService followService;
 
-    private static ExecutorService threadPool = Executors.newSingleThreadExecutor();
     /**
-     *     keypoint 增加一个异步线程， 从项目启动后开始运行
+     *     kp 增加一个异步线程， 从项目启动后开始运行
      *     initRedisBlog : 项目启动后， 初始化redis当中的点赞信息
      *     getNeedUpdateLikeBlog ： 获取到需要更新的博客id， 这是为了防止 大量无需更新的点赞信息造成redis和数据库额外的压力
      *     todo 下面这个可以进行修正， 采用事物的方式
@@ -89,44 +87,41 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         redisTemplate.opsForHash().put(RedisConstants.BLOG_LIKE_ISUPDATE, blogId, String.valueOf(0));
         return count;
     }
-    @PostConstruct
+//    @PostConstruct
     private void init() {
         // todo 创建三个表
         initRedisBlog();
         // 4、检验每次的需要更新的人数， 人数多，分批次执行
-        threadPool.submit(new Runnable() {
-            // 3、开启异步定时任务
-            @Override
-            public void run() {
-                while (true) {
-                    try {
-                        // 1、从redis当中获取哪个博客点赞需要更新
-                        List<Long> updateBolgList = getNeedUpdateLikeBlog();
-                        log.debug("进入blog的异步2");
-                        int total = updateBolgList.size();
-                        boolean isSleep = false;
-                        if (total > 10000) {
-                            isSleep = true;
-                        }
-                        log.debug("开始blog的异步循环");
-                        // 2、在BLOG_LIKE_TOTAL 和 对应的 BLOG_LIKE_CACHE 查询，
-                        for (int i = 0; i < total; i++) {
-                            if (isSleep && i % 10000 == 0) {
-                                Thread.sleep(3000);
-                            }
-                            // 3、修改三个表的信息
-                            String count = updateBlogLikesInRedis(updateBolgList, i);
-                            UpdateWrapper<Blog> blogUpdateWrapper = new UpdateWrapper<>();
-                            blogUpdateWrapper.setSql("liked =  " + count).eq("id", updateBolgList.get(i));
-                            boolean update = update(blogUpdateWrapper);
-                            if(!update) {
-                                throw new Exception();
-                            }
-                        }
-                        Thread.sleep(1000 * 20);
-                    }catch(Exception e){
-                        log.debug("出现了BUG");
+        // 3、开启异步定时任务
+        ThreadPool.submitTask(() -> {
+            while (true) {
+                try {
+                    // 1、从redis当中获取哪个博客点赞需要更新
+                    List<Long> updateBolgList = getNeedUpdateLikeBlog();
+                    log.debug("进入blog的异步2");
+                    int total = updateBolgList.size();
+                    boolean isSleep = false;
+                    if (total > 10000) {
+                        isSleep = true;
                     }
+                    log.debug("开始blog的异步循环");
+                    // 2、在BLOG_LIKE_TOTAL 和 对应的 BLOG_LIKE_CACHE 查询，
+                    for (int i = 0; i < total; i++) {
+                        if (isSleep && i % 10000 == 0) {
+                            Thread.sleep(3000);
+                        }
+                        // 3、修改三个表的信息
+                        String count = updateBlogLikesInRedis(updateBolgList, i);
+                        UpdateWrapper<Blog> blogUpdateWrapper = new UpdateWrapper<>();
+                        blogUpdateWrapper.setSql("liked =  " + count).eq("id", updateBolgList.get(i));
+                        boolean update = update(blogUpdateWrapper);
+                        if(!update) {
+                            throw new Exception();
+                        }
+                    }
+                    Thread.sleep(1000 * 20);
+                }catch(Exception e){
+                    log.debug("出现了BUG");
                 }
             }
         });
@@ -264,7 +259,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             return;
         }
         Long userId = user.getId();
-        // keypoint 查询当前用户是否点赞
+        // kp 查询当前用户是否点赞
         Long rank = redisTemplate.opsForZSet().rank(RedisConstants.BLOG_LIKE_CACHE + blog.getId().toString(), userId.toString());
         if(BeanUtil.isNotEmpty(rank)) {
             blog.setIsLike(true);

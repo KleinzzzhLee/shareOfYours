@@ -20,8 +20,23 @@ spring:
         time-between-eviction-runs: 10s
   jackson:
     default-property-inclusion: non_null # JSON处理时忽略非空字段
+  mail:
+    host: smtp.163.com
+    username: zzzhlee0930@163.com
+    password: RYBJQOBTUCFDPBDF
+    properties:
+      from: zzzhlee0930@163.com
+    thymeleaf:
+      cache: false
+      prefix: classpath:/views/
+      servlet:
+        multipart:
+          max-file-size: 5MB #限制单个文件大小
+          max-request-size: 50MB #限制请求总量
 mybatis-plus:
   type-aliases-package: com.hmdp.entity # 别名扫描包
 logging:
   level:
     com.hmdp: debug
+
+

@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 
 /**
  * <p>
- * 
+ *
  * </p>
  *
  * @author zzzhlee
@@ -33,9 +33,10 @@ public class User implements Serializable {
     private Long id;
 
     /**
-     * 手机号码
+     * 账号号码
      */
-    private String phone;
+    private String account;
+
 
     /**
      * 密码，加密存储
