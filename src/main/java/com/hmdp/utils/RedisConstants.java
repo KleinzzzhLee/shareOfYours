@@ -1,7 +1,7 @@
 package com.hmdp.utils;
 
 /**
- * 存入到redis中的key值， 常量
+ * 常量
  */
 public class RedisConstants {
 
@@ -19,8 +19,8 @@ public class RedisConstants {
     /**
      * 存入token的前缀
      */
-    public static final String LOGIN_USER_KEY = "login:token:";
-
+    public static final String LOGIN_USER_KEY = "login:token";
+    public static final String LOGIN_USER_EXPIRE = "login:expire";
     /**
      * 令牌的存在时间
      */
@@ -91,6 +91,8 @@ public class RedisConstants {
     public static final String BLOG_LIKE_CACHE = "blog:like:";
     public static final String BLOG_LIKE_ISUPDATE = "blog:like:isupdate";
     public static final String BLOG_LIKE_TOTAL = "blog:like:total";
+    public static final String BLOG_CACHE = "blog:cache:";
+    public static final long BLOG_CACHE_TIME = 300L;
     /**
      * 用户的关注表  set
      */
@@ -131,4 +133,27 @@ public class RedisConstants {
      * 商店更新时间戳的依据
      */
     public static final String HOT_SHOP_UPDATE_KEY = "shop:update:timeStamp";
+
+    /**
+     * 用户签到表的前缀
+     */
+    public static final String USER_SIGN_PREFIX = "user:sign:";
+    /**
+     * 活跃用户表
+     */
+    public static final String USER_ACTIVE_LIST = "user:active:list";
+
+    /**
+     * 本周期的最大连续签到次数
+     */
+    public static final String USER_SING_TIMES_NOW = "user:now:sign";
+    /**
+     * 上周期的最大连续签到次数
+     */
+    public static final String USER_SIGN_TIMES_LAST = "user:last:sign";
+
+
+
+
+
 }

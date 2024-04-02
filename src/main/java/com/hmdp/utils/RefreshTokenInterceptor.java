@@ -1,14 +1,15 @@
 package com.hmdp.utils;
 
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.hmdp.entity.dto.UserDTO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.concurrent.TimeUnit;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * 该拦截器 拦截所有请求，
@@ -16,6 +17,7 @@ import java.util.concurrent.TimeUnit;
  *
  *   这样做的目的： 使得登录后的一切操作都会对token进行刷新
  */
+@Slf4j
 public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     private RedisTemplate<String, Object> redisTemplate;
@@ -27,22 +29,43 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 1、获取到请求头的token信息
-        String token = RedisConstants.LOGIN_USER_KEY +  request.getHeader(RedisConstants.LOGIN_AUTHORIZATION);
+        String token = request.getHeader(RedisConstants.LOGIN_AUTHORIZATION);
+       // String token = RedisConstants.LOGIN_USER_KEY  +  ;
         // 2.1如果信息不存在， 直接放行
         if(StrUtil.isEmpty(token)){
             return true;
         }
         // 2.2如果信息存在，
-        String userJSON = (String) redisTemplate.opsForValue().get(token);
-        if(userJSON == null) {
+        //  kp hash
+        // String userJSON = (String) redisTemplate.opsForValue().get(token);
+        String[] userKeys = {token + ".nickName", token + ".icon", token + ".id", token + ".timestamp"};
+        int i = Math.abs(token.hashCode() % 500);
+        List<Object> objects = redisTemplate.opsForHash().multiGet(RedisConstants.LOGIN_USER_KEY + i, Arrays.asList(userKeys));
+
+        if(objects.get(0) == null) {
             return true;
         }
-        UserDTO userDTO = JSONUtil.toBean(userJSON, UserDTO.class);
+        // 判断登录是否过期
+        long lastTime = Long.parseLong((String) objects.get(3));
+        long now = System.currentTimeMillis() / 1000;
+        if(now - lastTime > 10 * 60) {
+            log.debug("登录时间过期");
+            return true;
+        }
+
+        String nickName = (String) objects.get(0);
+        String icon = (String) objects.get(1);
+        String id = (String) objects.get(2);
+        UserDTO userDTO = new UserDTO();
+        userDTO.setIcon(icon);
+        userDTO.setNickName(nickName);
+        userDTO.setId(Long.valueOf(id));
         // 3、判断用户是否存在
         // 3.1如果不存在， 直接执行
 
         // 3.2存在， 刷新token的有效期
-        redisTemplate.expire(token, 300, TimeUnit.MINUTES);
+//        redisTemplate.expire(token, 300, TimeUnit.MINUTES);
+        redisTemplate.opsForHash().put(RedisConstants.LOGIN_USER_KEY + i, token + ".timestamp", String.valueOf(now));
         // 4.将token存入到ThreadLocal中，
         UserHolder.saveUser(userDTO);
         return true;

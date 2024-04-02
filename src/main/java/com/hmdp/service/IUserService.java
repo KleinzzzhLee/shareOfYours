@@ -23,5 +23,8 @@ public interface IUserService extends IService<User> {
 
     Result sendCode(String account);
 
+    Result getFeedback();
 
+
+//    Result userSign();
 }

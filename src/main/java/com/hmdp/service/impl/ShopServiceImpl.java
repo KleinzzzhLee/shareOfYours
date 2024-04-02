@@ -17,8 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -40,13 +38,13 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Override
     public Result queryShop(Long id) {
         // 增加防止缓存击穿的表中的次数
-//        redisTemplate.opsForHash().increment(RedisConstants.SHOP_SUDDEN_TIMES, id.toString(), 1);
-//        Result result = queryShopWithRedis(id);
-//        // 5、降低，当前的访问人数
-//        redisTemplate.opsForHash().increment(RedisConstants.SHOP_SUDDEN_TIMES, id.toString(), -1);
-//        return result;
-        Shop shop = getById(id);
-        return Result.ok(shop);
+        redisTemplate.opsForHash().increment(RedisConstants.SHOP_SUDDEN_TIMES, id.toString(), 1);
+        Result result = queryShopWithRedis(id);
+        // 5、降低，当前的访问人数
+        redisTemplate.opsForHash().increment(RedisConstants.SHOP_SUDDEN_TIMES, id.toString(), -1);
+        return result;
+//        Shop shop = getById(id);
+//        return Result.ok(shop);
     }
 
     private Result queryShopWithRedis(Long id) {
@@ -64,7 +62,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         Shop shop = JSONUtil.toBean(shopJSON, Shop.class);
         if(shopJSON != null) {
             // 2、1 访问时间戳进行修正，直接返回
-            updateCacheTimeStamp(id); // todo 此处存在并发问题， 需修正 从2、开始到此 存在并发问题
+            updateCacheTimeStamp(id);
             // 如果此时热点数据被更新，该商店被删除
             return Result.ok(shop);
 
@@ -72,7 +70,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
         // 3、不是热点数据， 且访问次数超过限制，直接进行缓存， 其他线程等待查询缓存
         String times = (String) redisTemplate.opsForHash().get(RedisConstants.SHOP_SUDDEN_TIMES, id.toString());
-        if( Long.parseLong(times) > 50L) {
+        if( Long.parseLong(times) > 25L) {
             try {
                 // kp 采用分布式锁的方式， 防止缓存击穿
                 while (true) {
@@ -110,14 +108,16 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
                         return null;
                     }
                 });
-                String addTimes = (String) res.get(2);
-                redisTemplate.opsForHash().increment(RedisConstants.SHOP_GET_TIMES, id.toString(), Long.parseLong(addTimes));
+
+//                String addTimes = (String) res.get(2);
+//                redisTemplate.opsForHash().increment(RedisConstants.SHOP_GET_TIMES, id.toString(), Long.parseLong(addTimes));
                 // 释放锁
                 redisTemplate.delete(RedisConstants.SHOP_CACHING_LOCK + id.toString());
 
                 return Result.ok(shop);
             } catch (Exception e) {
                 log.debug("缓存击穿，新增商店缓存时出现问题");
+                throw new RuntimeException("error!!");
             }
         }
         // 4、未超过限制，直接进行商店的查询
@@ -179,7 +179,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // 更新商店
         boolean update = updateById(shop);
 //        int a = 1/ 0;
-        // 删除缓存
+        // 删除缓存 todo 采用消息队列异步？
         Boolean delete = redisTemplate.delete(RedisConstants.SHOP_KEY + shop.getId());
         if(update && delete) {
             log.debug("更新成功");

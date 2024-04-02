@@ -5,6 +5,7 @@ import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.entity.dto.FeedbackMessageDTO;
 import com.hmdp.entity.dto.LoginFormDTO;
 import com.hmdp.entity.dto.Result;
 import com.hmdp.entity.dto.UserDTO;
@@ -12,15 +13,23 @@ import com.hmdp.entity.User;
 import com.hmdp.entity.vo.MailVO;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.*;
+import com.hmdp.utils.enums.FeedbackType;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import javax.servlet.http.HttpSession;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
@@ -42,6 +51,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Resource
     private MailServiceImpl mailService;
+
+    @Resource
+    private RabbitTemplate rabbitTemplate;
 
     @Override
     public Result sendCode(String account) {
@@ -73,10 +85,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return Result.ok();
     }
 
+
     /**
      *  用户登录
      * @param loginForm 登录信息
-     * @param session
+     * @param
      * @return
      */
     @Override
@@ -84,13 +97,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 1、检验手机号
         // 2、检验验证码 或者 检验密码 todo 密码在数据库中存储要采用加密形式
         // todo 检验是否注册
-
         //1. 校验邮箱
         String account = loginForm.getPhone();
         if (RegexUtils.isEmailInvalid(account) && RegexUtils.isPhoneInvalid(account)) {
             return Result.fail("账户格式错误");
         }
-
         //2. 校验验证码
         String cacheCode = (String) redisTemplate.opsForValue().get(RedisConstants.LOGIN_USER_CODE + account);
 //        Object cacheCode = session.getAttribute("code");
@@ -114,16 +125,34 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
 
         // todo 生成令牌， 用于作为key值
-        String token = RandomUtil.randomString(10);
-        String userDTOJSON = JSONUtil.toJsonStr(userDTO);
-        // 向redis中存入token 设置有效期
-        redisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_KEY + token, userDTOJSON, RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
+        String token = RandomUtil.randomString(6);
 
+        int i = Math.abs(token.hashCode() % 500);
+
+        // 向redis中存入token 设置有效期
+        // kp 采用 hash进行存储
+        // redisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_KEY + token, userDTOJSON, RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
+        Map<String, String> map = new HashMap<>();
+        map.put(token + "." + "nickName", userDTO.getNickName());
+        map.put(token + "." + "icon", userDTO.getIcon());
+        map.put(token + "." + "id", String.valueOf(userDTO.getId()));
+        map.put(token + "." + "timestamp", String.valueOf(System.currentTimeMillis()/1000));
+         redisTemplate.executePipelined(new SessionCallback<Object>() {
+            @Override
+            public <K, V> Object execute(RedisOperations<K, V> operations) throws DataAccessException {
+                redisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USER_KEY + i, map);
+                redisTemplate.delete(RedisConstants.LOGIN_USER_CODE + account);
+                return null;
+            }
+        });
+         // kp 用户签到 利用消息队列异步执行
+        rabbitTemplate.convertAndSend(RabbitConstants.CHECK_ACTIVE_USER_QUEUE, user.getId());
+//        userSign(user.getId());
         // 删除验证码
-        Boolean delete = redisTemplate.delete(RedisConstants.LOGIN_USER_CODE + account);
-        if(Boolean.TRUE.equals(delete)) {
-            log.debug("删除验证码成功");
-        }
+//        boolean delete = (boolean) list.get(1);
+//        if(Boolean.TRUE.equals(delete)) {
+//            log.debug("删除验证码成功");
+//        }
 
         return Result.ok(token);
     }
@@ -140,5 +169,62 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return user;
     }
 
+
+
+    @Override
+    public Result getFeedback() {
+        // 获取当前用户
+        UserDTO user = UserHolder.getUser();
+        Map<FeedbackType, List<Object>> resMap = new HashMap<>();
+        resMap.put(FeedbackType.isBlogLike, new ArrayList<>());
+        resMap.put(FeedbackType.isComment, new ArrayList<>());
+        resMap.put(FeedbackType.isFollow, new ArrayList<>());
+        // 从MQ中获取消息
+        while(true) {
+            Message message = rabbitTemplate.receive(
+                    RabbitConstants.FEEDBACK_QUEUE_PREFIX + user.getId() % 10,
+                    RabbitConstants.FEEDBACK_TIMEOUT);
+            if(message == null) {
+                break;
+            }
+            FeedbackMessageDTO messageDTO =
+                    JSONUtil.toBean(RabbitUtil.getInfoFromMessageBody(message, null), FeedbackMessageDTO.class);
+            List<Object> list = resMap.get(messageDTO.getType());
+            list.add(messageDTO.getData());
+        }
+        return Result.ok(resMap);
+    }
+
+
+
+
+
+    // kp 用户签到， 采用redis的BitMap 转入 RabbitMQ异步处理
+//    public Result userSign(Long userId) {
+//        // 1、获取当前用户及日期
+//        int dayOfWeek = LocalDateTime.now().getDayOfWeek().getValue();
+//        // 2、在缓存中更新签到记录bitmap
+//        redisTemplate.opsForValue().setBit(RedisConstants.USER_SIGN_PREFIX + userId, dayOfWeek - 1, true);
+//        // 3、统计最大连续签到次数 todo 利用消息队列计算， 存储在redis中
+//        List<Long> list =  redisTemplate.opsForValue().bitField(RedisConstants.USER_SIGN_PREFIX + userId,
+//                BitFieldSubCommands.create()
+//                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfWeek)).valueAt(0));
+//
+//        Long num = list.get(0);
+//        // 计算最大签到次数
+//        int max = 0;
+//        int temp = 0;
+//        while(num != 0) {
+//            if((num & 1) == 1) {
+//                temp++;
+//            } else {
+//                temp = 0;
+//            }
+//            num = num >>> 1;
+//            max = Math.max(max, temp);
+//        }
+//        log.debug("签到次数" + max);
+//        return Result.ok();
+//    }
 
 }

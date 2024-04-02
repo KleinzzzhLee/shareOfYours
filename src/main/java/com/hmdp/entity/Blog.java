@@ -55,6 +55,12 @@ public class Blog implements Serializable {
      */
     @TableField(exist = false)
     private Boolean isLike;
+    /**
+     * 放入到缓存的时间戳
+     */
+    @TableField(exist = false)
+    private Long timestamp;
+
 
     /**
      * 标题

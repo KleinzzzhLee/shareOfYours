@@ -4,32 +4,34 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.ListUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.entity.SeckillVoucher;
 import com.hmdp.entity.dto.Result;
 import com.hmdp.entity.dto.UserDTO;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
+import com.hmdp.service.IVoucherService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.SnowflakeIdWorker;
-import com.hmdp.utils.ThreadPool;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.aop.framework.AopContext;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -40,6 +42,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private RedisTemplate<String, Object> redisTemplate;
     @Resource
     private IVoucherOrderService voucherOrderService;
+
+    @Resource
+    private IVoucherService voucherService;
 
     // kp 利用redisson 解除在redis上的原子性问题
     @Resource
@@ -59,15 +64,16 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @PostConstruct
     private void init() {
-        ThreadPool.submitTask(new syncHandleSeckillVoucherOrder());
+        Thread thread = new Thread(new asyncHandleSeckillVoucherOrder());
+        thread.start();
     }
 
-    private class syncHandleSeckillVoucherOrder implements Runnable {
-
+    private class asyncHandleSeckillVoucherOrder implements Runnable {
         @Override
         public void run() {
             while(true) {
                 try {
+                    Thread.sleep(30 * 1000);
                     // 1、获取消息队列中的订单信息
                     List<MapRecord<String, Object, Object>> list = redisTemplate.opsForStream().read(
                             Consumer.from("group", "consumer"),
@@ -101,6 +107,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         private void handlePaddingList() {
             while(true) {
                 try {
+                    // 0、 预先在redis中创建消费者组 通过命令行
                     // 1、获取padding-list中的未确认的订单信息
                     List<MapRecord<String, Object, Object>> list = redisTemplate.opsForStream().read(
                             Consumer.from("group", "consumer"),
@@ -186,8 +193,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     /**
      *  todo 开启秒杀异步的方式： 提高秒杀效率
      */
-    @Override
-    public Result purchaseSecKillVoucher(Long voucherId) {
+    public Result purchaseSecKillVoucherAsync(Long voucherId) {
         // 0、将要购买的消息放入到缓存
         VoucherOrder order = new VoucherOrder();
         // 0.1 用户的id  userId
@@ -211,6 +217,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         log.debug("已成功购买");
         return Result.ok();
+    }
+
+
+    @Override
+    public Result purchaseSecKillVoucher(Long voucherId) {
+//        return voucherOrderByDB(voucherId);
+        return purchaseSecKillVoucherAsync(voucherId);
     }
 
 
@@ -271,43 +284,75 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //        return Result.ok(order.getId());
 //    }
 
-/*
-    //        kp 单体模式 解决方案 SECOND : 解决了一人一单的问题
-//        1、查询秒杀券是否存在
-//        SeckillVoucher seckillVoucher =  seckillVoucherService.getById(voucherId);
-//        if(seckillVoucher == null ) {
-//            return Result.fail("秒杀券已过期，请刷新网页");
+
+    public Result voucherOrderByDB(Long voucherId) {
+        //        kp 单体模式 解决方案 SECOND : 解决了一人一单的问题
+        // 1、查询秒杀券是否存在
+        SeckillVoucher seckillVoucher = seckillVoucherService.getById(voucherId);
+        if (seckillVoucher == null) {
+            return Result.fail("秒杀券已过期，请刷新网页");
+        }
+
+        // 2、 查看秒杀是否开启
+        if (seckillVoucher.getBeginTime().isAfter(LocalDateTime.now()) || seckillVoucher.getEndTime().isBefore(LocalDateTime.now())) {
+            return Result.fail("不在秒杀时间内");
+        }
+        // 2、判断秒杀券数量是否足够
+        if (seckillVoucher.getStock() < 1) {
+            return Result.fail("库存不足");
+        }
+        // 3、对秒杀券数量修改
+//        seckillVoucher.setStock(seckillVoucher.getStock() - 1);
+//        if(!seckillVoucherService.updateById(seckillVoucher)) {
+//            return Result.fail("抢购失败");
 //        }
-//
-//        // 2、 查看秒杀是否开启
-//        if (seckillVoucher.getBeginTime().isAfter(LocalDateTime.now()) || seckillVoucher.getEndTime().isBefore(LocalDateTime.now())) {
-//            return Result.fail("不在秒杀时间内");
-//        }
-//        // 2、判断秒杀券数量是否足够
-//        if(seckillVoucher.getStock() < 1) {
-//            return Result.fail("库存不足");
-//        }
-//        // 3、对秒杀券数量修改
-////        seckillVoucher.setStock(seckillVoucher.getStock() - 1);
-////        if(!seckillVoucherService.updateById(seckillVoucher)) {
-////            return Result.fail("抢购失败");
-////        }
-//        // 6、返回结果 订单id
-//        /**
-//         * kp 字符串的intern方法，
-//         *  intern是从字符串常量池中搜索是否存在该字符串， 如果存在。直接取出； 不存在，在字符串常量池中添加在返回
-//         */
-//        Long userId = UserHolder.getUser().getId();
-//        kp 为保证一人一单， 注意点：
-//          1、悲观锁往往锁的是对象
-//          2、应先提交事物，再释放锁
-//          3、在方法内部调用@Trasactional标注的方法， 不能使事物生效，
-//                    原因： 在spring中，该注解的实现是通过代理机制实现的， 必须获取到该代理对象 ， 通过代理对象调用才可
-//        synchronized (userId.toString().intern()) {
-//            // 获得当前类的代理对象
-//            IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
-//            return proxy.purchaseSecKillVoucherOfOneOly(seckillVoucher);
-//        }
+        // 6、返回结果 订单id
+        /**
+         * kp 字符串的intern方法，
+         *  intern是从字符串常量池中搜索是否存在该字符串， 如果存在。直接取出； 不存在，在字符串常量池中添加在返回
+         */
+        Long userId = UserHolder.getUser().getId();
+//        kp 为保证一人一单，注意点：
+//        1、悲观锁往往锁的是对象
+//        2、应先提交事物，再释放锁
+//        3、在方法内部调用 @Trasactional标注的方法，不能使事物生效，
+//        原因：在spring中，该注解的实现是通过代理机制实现的，必须获取到该代理对象 ，通过代理对象调用才可
+        synchronized (userId.toString().intern()) {
+            // 获得当前类的代理对象
+            IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
+            return proxy.purchaseSecKillVoucherOfOneOly(voucherId, userId);
+        }
+    }
+    @Override
+    @Transactional
+    public Result purchaseSecKillVoucherOfOneOly(Long voucherId, Long userId) {
+        // 1、查詢当前用户是否购买过
+        if (query().eq("user_id", userId).eq("voucher_id", voucherId).count() > 0) {
+            // 2、购买过， 直接返回null
+            log.error("不可重复购买");
+            return Result.fail("不可重复购买");
+        }
+        if(seckillVoucherService.getById(voucherId).getStock() < 1) {
+            return Result.fail("数量不足");
+        }
+        // 3、未购买过， 雪花算法生成订单id
+        Long id = SnowflakeIdWorker.nextId(SnowflakeIdWorker.ORDER_PREFIX);
+        // 4、增加订单
+        VoucherOrder order = new VoucherOrder();
+        order.setId(id);
+        order.setVoucherId(voucherId);
+        order.setUserId(userId);
+        save(order);
+        // 5、对秒杀券的数量减1
+        boolean update = seckillVoucherService.update()
+                .eq("voucher_id", voucherId)
+                .gt("stock", 0)
+                .setSql("stock = stock - 1")
+                .update();
+        // 6、返回
+        return Result.ok();
+    }
+
 
     /**
      *  采用异步的方法

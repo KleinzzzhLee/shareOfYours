@@ -87,7 +87,7 @@ public class BlogController {
 
     @GetMapping("/of/follow")
     public Result getBlogsFromUps(@RequestParam("lastId") long lastId,
-                                  @RequestParam(value = "offSet", defaultValue = "0") Integer offSet) {
+                                  @RequestParam(value = "offset", defaultValue = "0") Integer offSet) {
         return blogService.getBlogFromUps(lastId,offSet);
     }
 }
